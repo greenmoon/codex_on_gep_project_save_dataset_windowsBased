@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V01 2026.06.25 15:11</title>
+  <title>A1528B eSRD Range Profile Web UART V05 2026.06.25 16:22</title>
   <style>
     :root {
       color-scheme: light;
@@ -24,6 +24,8 @@
 
     body {
       margin: 0;
+      height: 100vh;
+      overflow: hidden;
       background: var(--bg);
       color: var(--ink);
       font-family: Arial, Helvetica, sans-serif;
@@ -34,7 +36,8 @@
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 16px;
       align-items: center;
-      padding: 16px 20px;
+      height: 56px;
+      padding: 10px 16px;
       background: var(--panel);
       border-bottom: 1px solid var(--line);
     }
@@ -56,27 +59,33 @@
     main {
       display: grid;
       grid-template-columns: 320px minmax(0, 1fr);
-      min-height: calc(100vh - 58px);
+      height: calc(100vh - 56px);
+      min-height: 0;
+      overflow: hidden;
     }
 
     aside {
-      padding: 16px;
+      min-height: 0;
+      overflow: hidden;
+      padding: 10px;
       background: var(--panel);
       border-right: 1px solid var(--line);
     }
 
     .plot-wrap {
       display: grid;
-      grid-template-rows: minmax(360px, 1fr) auto;
+      grid-template-rows: minmax(0, 1fr) auto;
       min-width: 0;
-      padding: 16px;
-      gap: 12px;
+      min-height: 0;
+      overflow: hidden;
+      padding: 10px;
+      gap: 8px;
     }
 
     canvas {
       width: 100%;
       height: 100%;
-      min-height: 360px;
+      min-height: 0;
       display: block;
       background: #ffffff;
       border: 1px solid var(--line);
@@ -85,8 +94,8 @@
 
     .group {
       display: grid;
-      gap: 10px;
-      margin-bottom: 18px;
+      gap: 8px;
+      margin-bottom: 10px;
     }
 
     label {
@@ -129,6 +138,13 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
+    }
+
+    .com-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: end;
     }
 
     .checks {
@@ -182,7 +198,7 @@
 
     .metrics {
       display: grid;
-      grid-template-columns: repeat(5, minmax(90px, 1fr));
+      grid-template-columns: repeat(5, minmax(80px, 1fr));
       gap: 8px;
     }
 
@@ -237,20 +253,43 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V01 2026.06.25 15:11</h1>
+    <h1>A1528B eSRD Range Profile Web UART V05 2026.06.25 16:22</h1>
     <div class="status" id="status">Ready.</div>
   </header>
 
   <main>
     <aside>
       <div class="group">
+        <div class="com-row">
+          <label>
+            Preferred UART port
+            <select id="comPort">
+              <option value="COM1">COM1</option>
+              <option value="COM2">COM2</option>
+              <option value="COM3">COM3</option>
+              <option value="COM4">COM4</option>
+              <option value="COM5" selected>COM5</option>
+              <option value="COM6">COM6</option>
+              <option value="COM7">COM7</option>
+              <option value="COM8">COM8</option>
+              <option value="COM9">COM9</option>
+              <option value="COM10">COM10</option>
+              <option value="/dev/ttyUSB0">/dev/ttyUSB0</option>
+              <option value="/dev/ttyUSB1">/dev/ttyUSB1</option>
+              <option value="/dev/ttyACM0">/dev/ttyACM0</option>
+              <option value="/dev/ttyACM1">/dev/ttyACM1</option>
+            </select>
+          </label>
+          <button id="refreshPorts">Refresh</button>
+        </div>
+        <div class="note" id="portList">No authorized ports yet.</div>
         <label>
           Baud rate
           <input id="baudRate" type="number" min="1" step="1" value="921600">
         </label>
         <label>
           Display window
-          <input id="windowSize" type="number" min="20" max="5000" step="10" value="600">
+          <input id="windowSize" type="number" min="20" max="5000" step="10" value="300">
         </label>
         <div class="row">
           <button id="connect" class="primary">Connect UART</button>
@@ -260,8 +299,8 @@
 
       <div class="group checks">
         <label><input id="showR0" type="checkbox" checked> r0</label>
-        <label><input id="showR1" type="checkbox" checked> r1</label>
-        <label><input id="showR2" type="checkbox" checked> r2</label>
+        <label><input id="showR1" type="checkbox"> r1</label>
+        <label><input id="showR2" type="checkbox"> r2</label>
       </div>
 
       <div class="group">
@@ -269,14 +308,11 @@
           <button id="downloadCsv">Download CSV</button>
           <button id="downloadLog">Download Raw</button>
         </div>
-        <div class="row">
-          <button id="clearData">Clear</button>
-          <button id="demoData">Demo</button>
-        </div>
+        <button id="clearData">Clear</button>
       </div>
 
       <p class="note">
-        This page reads UART through the browser Web Serial API. It requires Chrome or Edge over HTTPS or localhost. The radar must be connected to the same PC that opens this page.
+        This page reads UART through the browser Web Serial API. It supports Windows and Linux in Chrome or Edge over HTTPS or localhost. Browser security requires manual port selection; choose COM5 on Windows or ttyUSB/ttyACM on Linux when prompted.
       </p>
     </aside>
 
@@ -288,11 +324,11 @@
         <div class="metric"><span>fn</span><b id="lastFn">-</b></div>
         <div class="metric"><span>Last r0</span><b id="lastR0">-</b></div>
         <div class="metric">
-          <span>Legend</span>
+          <span>Legend RGB r0 r1 r2</span>
           <div class="legend">
-            <span class="r0"><i class="swatch"></i>r0</span>
-            <span class="r1"><i class="swatch"></i>r1</span>
-            <span class="r2"><i class="swatch"></i>r2</span>
+            <span id="legendR0"><i class="swatch"></i>r0</span>
+            <span id="legendR1"><i class="swatch"></i>r1</span>
+            <span id="legendR2"><i class="swatch"></i>r2</span>
           </div>
         </div>
       </div>
@@ -301,8 +337,11 @@
 
   <script>
     const els = {
+      comPort: document.getElementById("comPort"),
       baudRate: document.getElementById("baudRate"),
       windowSize: document.getElementById("windowSize"),
+      refreshPorts: document.getElementById("refreshPorts"),
+      portList: document.getElementById("portList"),
       connect: document.getElementById("connect"),
       disconnect: document.getElementById("disconnect"),
       showR0: document.getElementById("showR0"),
@@ -311,20 +350,22 @@
       downloadCsv: document.getElementById("downloadCsv"),
       downloadLog: document.getElementById("downloadLog"),
       clearData: document.getElementById("clearData"),
-      demoData: document.getElementById("demoData"),
       status: document.getElementById("status"),
       canvas: document.getElementById("plot"),
       count: document.getElementById("count"),
       badCount: document.getElementById("badCount"),
       lastFn: document.getElementById("lastFn"),
-      lastR0: document.getElementById("lastR0")
+      lastR0: document.getElementById("lastR0"),
+      legendR0: document.getElementById("legendR0"),
+      legendR1: document.getElementById("legendR1"),
+      legendR2: document.getElementById("legendR2")
     };
 
     const colors = {
       r0: "#ff0000",
       r1: "#00a000",
       r2: "#0000ff",
-      grid: "#edf0f4",
+      grid: "#d9dee7",
       axis: "#667085",
       text: "#17202a",
       muted: "#667085"
@@ -337,17 +378,25 @@
       records: [],
       rawLines: [],
       badCount: 0,
-      demoTimer: null
+      portMap: new Map()
     };
 
     function setStatus(text) {
       els.status.textContent = text;
     }
 
+    function syncLegendColors() {
+      els.legendR0.style.color = colors.r0;
+      els.legendR1.style.color = colors.r1;
+      els.legendR2.style.color = colors.r2;
+    }
+
     function setConnected(isConnected) {
       els.connect.disabled = isConnected;
       els.disconnect.disabled = !isConnected;
+      els.comPort.disabled = isConnected;
       els.baudRate.disabled = isConnected;
+      els.refreshPorts.disabled = isConnected;
     }
 
     function numberOrNull(value) {
@@ -398,18 +447,64 @@
         return;
       }
 
-      stopDemo();
       const baudRate = Number(els.baudRate.value) || 921600;
+      const preferredPort = els.comPort.value || "COM5";
       try {
-        state.port = await navigator.serial.requestPort();
+        setStatus(`Select ${preferredPort} in the browser port picker.`);
+        state.port = state.portMap.get(preferredPort) || await navigator.serial.requestPort();
         await state.port.open({ baudRate });
         setConnected(true);
-        setStatus(`Connected @ ${baudRate}`);
+        await refreshPorts();
+        setStatus(`Connected ${preferredPort} @ ${baudRate}`);
         state.reading = true;
         await readLoop();
       } catch (err) {
         setStatus(`Connect failed: ${err.message}`);
         await disconnectSerial();
+      }
+    }
+
+    async function refreshPorts() {
+      if (!("serial" in navigator)) {
+        els.portList.textContent = "Web Serial is not available.";
+        return;
+      }
+      try {
+        const ports = await navigator.serial.getPorts();
+        const currentValue = els.comPort.value || "COM5";
+        state.portMap = new Map();
+        els.comPort.innerHTML = "";
+
+        const portExamples = [];
+        for (let n = 1; n <= 20; n += 1) portExamples.push(`COM${n}`);
+        portExamples.push("/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyACM1");
+        for (const name of portExamples) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          els.comPort.appendChild(option);
+        }
+
+        ports.forEach((port, index) => {
+          const info = port.getInfo ? port.getInfo() : {};
+          const label = info.usbVendorId || info.usbProductId
+            ? `Authorized port ${index + 1} VID:${info.usbVendorId || "-"} PID:${info.usbProductId || "-"}`
+            : `Authorized port ${index + 1}`;
+          state.portMap.set(label, port);
+          const option = document.createElement("option");
+          option.value = label;
+          option.textContent = label;
+          els.comPort.appendChild(option);
+        });
+
+        els.comPort.value = [...els.comPort.options].some((option) => option.value === currentValue)
+          ? currentValue
+          : "COM5";
+        els.portList.textContent = ports.length
+          ? `${ports.length} authorized port(s) appended after Windows/Linux examples. Choose COMx or ttyUSB/ttyACM in the browser picker if needed.`
+          : "Showing Windows COM and Linux ttyUSB/ttyACM examples. Press Connect and choose the real port in the browser picker.";
+      } catch (err) {
+        els.portList.textContent = `Refresh failed: ${err.message}`;
       }
     }
 
@@ -452,30 +547,6 @@
       state.port = null;
       setConnected(false);
       setStatus("Disconnected.");
-    }
-
-    function stopDemo() {
-      if (state.demoTimer) {
-        clearInterval(state.demoTimer);
-        state.demoTimer = null;
-      }
-    }
-
-    function startDemo() {
-      stopDemo();
-      disconnectSerial();
-      let fn = state.records.length ? Number(state.records[state.records.length - 1].fn) + 1 : 0;
-      state.demoTimer = setInterval(() => {
-        const t = fn / 30;
-        parseJsonLine(JSON.stringify({
-          fn,
-          r0: 0.6 + Math.sin(t) * 0.08,
-          r1: 1.0 + Math.sin(t * 0.7 + 1) * 0.1,
-          r2: 1.45 + Math.cos(t * 0.55) * 0.12
-        }));
-        fn += 1;
-      }, 50);
-      setStatus("Demo data running.");
     }
 
     function clearData() {
@@ -532,7 +603,7 @@
         h: Math.max(10, h - pad.top - pad.bottom)
       };
 
-      const windowSize = Math.max(20, Number(els.windowSize.value) || 600);
+      const windowSize = Math.max(20, Number(els.windowSize.value) || 300);
       const points = state.records.slice(-windowSize);
 
       ctx.fillStyle = "#ffffff";
@@ -546,24 +617,8 @@
         return;
       }
 
-      const values = [];
-      for (const p of points) {
-        if (els.showR0.checked && p.r0 !== null) values.push(p.r0);
-        if (els.showR1.checked && p.r1 !== null) values.push(p.r1);
-        if (els.showR2.checked && p.r2 !== null) values.push(p.r2);
-      }
-
-      if (!values.length) return;
-
-      let minY = Math.min(...values);
-      let maxY = Math.max(...values);
-      if (minY === maxY) {
-        minY -= 0.5;
-        maxY += 0.5;
-      }
-      const margin = (maxY - minY) * 0.12;
-      minY -= margin;
-      maxY += margin;
+      const minY = -0.1;
+      const maxY = 1.5;
 
       const minFn = points[0].fn;
       const maxFn = points[points.length - 1].fn === minFn ? minFn + 1 : points[points.length - 1].fn;
@@ -583,15 +638,20 @@
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
 
-      for (let i = 0; i <= 5; i += 1) {
-        const y = box.y + (box.h * i) / 5;
-        const val = maxY - ((maxY - minY) * i) / 5;
+      const yStep = 0.1;
+      const yStart = Math.ceil(minY / yStep) * yStep;
+      const yCount = Math.round((maxY - yStart) / yStep);
+      for (let i = 0; i <= yCount; i += 1) {
+        const val = yStart + i * yStep;
+        const y = box.y + box.h - ((val - minY) / (maxY - minY)) * box.h;
         ctx.beginPath();
         ctx.moveTo(box.x, y);
         ctx.lineTo(box.x + box.w, y);
         ctx.stroke();
-        ctx.fillStyle = colors.axis;
-        ctx.fillText(val.toFixed(3), box.x - 8, y);
+        if (i % 2 === 0 || Math.abs(val) < 0.0001 || Math.abs(val - maxY) < 0.0001) {
+          ctx.fillStyle = colors.axis;
+          ctx.fillText(val.toFixed(1), box.x - 8, y);
+        }
       }
 
       ctx.textAlign = "center";
@@ -654,24 +714,40 @@
       return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     }
 
-    function download(name, type, content) {
+    async function saveToDataFolder(name, type, content) {
       const blob = new Blob([content], { type });
+      if (window.isSecureContext && "showDirectoryPicker" in window) {
+        try {
+          const root = await window.showDirectoryPicker({ mode: "readwrite" });
+          const dataDir = await root.getDirectoryHandle("data_eSRD", { create: true });
+          const file = await dataDir.getFileHandle(name, { create: true });
+          const writable = await file.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setStatus(`Saved to selected folder/data_eSRD/${name}`);
+          return;
+        } catch (err) {
+          if (err.name !== "AbortError") setStatus(`Folder save failed, using browser download: ${err.message}`);
+        }
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = name;
+      a.download = `data_eSRD/${name}`;
       a.click();
       URL.revokeObjectURL(url);
+      setStatus(`Downloaded ${name}. If the browser strips folders, move it to Downloads/data_eSRD.`);
     }
 
-    function downloadCsv() {
+    async function downloadCsv() {
       const header = ["pc_time_iso", "pc_time_ms", "fn", "r0", "r1", "r2", "raw_json"];
       const rows = state.records.map((r) => header.map((key) => csvEscape(r[key])).join(","));
-      download(`jb_GEP_dataset_${timestamp()}.csv`, "text/csv;charset=utf-8", [header.join(","), ...rows].join("\n"));
+      await saveToDataFolder(`jb_GEP_dataset_${timestamp()}.csv`, "text/csv;charset=utf-8", [header.join(","), ...rows].join("\n"));
     }
 
-    function downloadLog() {
-      download(`jb_GEP_dataset_${timestamp()}_raw.log`, "text/plain;charset=utf-8", state.rawLines.join("\n"));
+    async function downloadLog() {
+      await saveToDataFolder(`jb_GEP_dataset_${timestamp()}_raw.log`, "text/plain;charset=utf-8", state.rawLines.join("\n"));
     }
 
     function timestamp() {
@@ -682,8 +758,8 @@
 
     els.connect.addEventListener("click", connectSerial);
     els.disconnect.addEventListener("click", disconnectSerial);
+    els.refreshPorts.addEventListener("click", refreshPorts);
     els.clearData.addEventListener("click", clearData);
-    els.demoData.addEventListener("click", startDemo);
     els.downloadCsv.addEventListener("click", downloadCsv);
     els.downloadLog.addEventListener("click", downloadLog);
     for (const el of [els.windowSize, els.showR0, els.showR1, els.showR2]) {
@@ -691,13 +767,14 @@
     }
     window.addEventListener("resize", resizeCanvas);
     window.addEventListener("beforeunload", () => {
-      stopDemo();
       if (state.port) disconnectSerial();
     });
 
     if (!("serial" in navigator)) {
       setStatus("Web Serial needs Chrome or Edge over HTTPS.");
     }
+    syncLegendColors();
+    refreshPorts();
     updateMetrics();
     resizeCanvas();
   </script>
