@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V05 2026.06.25 16:22</title>
+  <title>A1528B eSRD Range Profile Web UART V06 2026.06.25 16:33</title>
   <style>
     :root {
       color-scheme: light;
@@ -253,7 +253,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V05 2026.06.25 16:22</h1>
+    <h1>A1528B eSRD Range Profile Web UART V06 2026.06.25 16:33</h1>
     <div class="status" id="status">Ready.</div>
   </header>
 
@@ -617,8 +617,8 @@
         return;
       }
 
-      const minY = -0.1;
-      const maxY = 1.5;
+      const minY = 0;
+      const maxY = 1.6;
 
       const minFn = points[0].fn;
       const maxFn = points[points.length - 1].fn === minFn ? minFn + 1 : points[points.length - 1].fn;
