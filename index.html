@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V10 2026.06.26 11:22</title>
+  <title>A1528B eSRD Range Profile Web UART V12 2026.06.26 11:33</title>
   <style>
     :root {
       color-scheme: light;
@@ -256,7 +256,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V10 2026.06.26 11:22</h1>
+    <h1>A1528B eSRD Range Profile Web UART V12 2026.06.26 11:33</h1>
     <div class="status" id="status">Ready.</div>
   </header>
 
@@ -298,6 +298,11 @@
           FW_ROI
           <input id="fwRoi" type="range" min="5" max="200" step="1" value="20">
           <span class="note" id="fwRoiLabel">20 frames</span>
+        </label>
+        <label>
+          CALI
+          <input id="caliCm" type="range" min="-10" max="10" step="1" value="0">
+          <span class="note" id="caliLabel">0 cm</span>
         </label>
         <div class="row">
           <button id="connect" class="primary">Connect UART</button>
@@ -355,6 +360,8 @@
       windowSize: document.getElementById("windowSize"),
       fwRoi: document.getElementById("fwRoi"),
       fwRoiLabel: document.getElementById("fwRoiLabel"),
+      caliCm: document.getElementById("caliCm"),
+      caliLabel: document.getElementById("caliLabel"),
       refreshPorts: document.getElementById("refreshPorts"),
       portList: document.getElementById("portList"),
       connect: document.getElementById("connect"),
@@ -417,6 +424,14 @@
       els.legendPeak.style.color = colors.peak;
     }
 
+    function caliMeters() {
+      return (Number(els.caliCm.value) || 0) / 100;
+    }
+
+    function calibratedHeight(rec) {
+      return rec.r0 === null ? null : 2.4 - rec.r0 + caliMeters();
+    }
+
     function setConnected(isConnected) {
       els.connect.disabled = isConnected;
       els.disconnect.disabled = !isConnected;
@@ -455,7 +470,7 @@
         height: null,
         raw_json: trimmed
       };
-      rec.height = rec.r0 === null ? null : 2.4 - rec.r0;
+      rec.height = calibratedHeight(rec);
 
       if (rec.fn === null || (rec.r0 === null && rec.r1 === null && rec.r2 === null)) {
         state.badCount += 1;
@@ -685,7 +700,10 @@
       };
 
       const windowSize = Math.max(20, Number(els.windowSize.value) || 300);
-      const points = state.records.slice(-windowSize);
+      const points = state.records.slice(-windowSize).map((rec) => ({
+        ...rec,
+        height: calibratedHeight(rec)
+      }));
 
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
@@ -845,11 +863,14 @@
       ctx.fill();
       ctx.stroke();
 
-      ctx.font = "bold 13px Arial";
+      ctx.font = "bold 65px Arial";
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
       ctx.fillStyle = color;
-      ctx.fillText(label, Math.min(x + 8, els.canvas.width - 58), Math.max(y - 8, 18));
+      const textWidth = ctx.measureText(label).width;
+      const labelX = Math.min(x + 12, els.canvas.width - textWidth - 10);
+      const labelY = Math.max(y - 12, 76);
+      ctx.fillText(label, Math.max(10, labelX), labelY);
     }
 
     function csvEscape(value) {
@@ -886,7 +907,10 @@
 
     async function downloadCsv() {
       const header = ["pc_time_iso", "pc_time_ms", "fn", "r0", "r1", "r2", "height", "raw_json"];
-      const rows = state.records.map((r) => header.map((key) => csvEscape(r[key])).join(","));
+      const rows = state.records.map((r) => {
+        const out = { ...r, height: calibratedHeight(r) };
+        return header.map((key) => csvEscape(out[key])).join(",");
+      });
       await saveToDataFolder(`jb_GEP_dataset_${timestamp()}.csv`, "text/csv;charset=utf-8", [header.join(","), ...rows].join("\n"));
     }
 
@@ -908,6 +932,10 @@
     els.downloadLog.addEventListener("click", downloadLog);
     els.fwRoi.addEventListener("input", () => {
       els.fwRoiLabel.textContent = `${els.fwRoi.value} frames`;
+      drawPlot();
+    });
+    els.caliCm.addEventListener("input", () => {
+      els.caliLabel.textContent = `${els.caliCm.value} cm`;
       drawPlot();
     });
     for (const el of [els.windowSize, els.showR0, els.showR1, els.showR2, els.showHeight, els.showDeglitch]) {
