@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V16 2026.06.26 13:00</title>
+  <title>A1528B eSRD Range Profile Web UART V17 2026.06.26 13:21</title>
   <style>
     :root {
       color-scheme: light;
@@ -277,7 +277,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V16 2026.06.26 13:00</h1>
+    <h1>A1528B eSRD Range Profile Web UART V17 2026.06.26 13:21</h1>
     <div class="status" id="status">Ready.</div>
   </header>
 
@@ -430,6 +430,9 @@
       { layer_num: 5, height_cm: 210, tolerance_cm: 20, state: "IDL" }
     ];
     const CALI_STORAGE_KEY = "a1528b_esrd_cali_cm";
+    const IBD_MICRO_MOTION_WINDOW_MS = 10000;
+    const IBD_FLAT_AMPLITUDE_CM = 0.3;
+    const IBD_TRUSTED_AMPLITUDE_CM = 3.0;
 
     const colors = {
       r0: "#ff0000",
@@ -506,6 +509,31 @@
         .filter((row) => row.diff <= row.tolerance_cm)
         .sort((a, b) => a.diff - b.diff || a.layer_num - b.layer_num);
       return matches[0] || null;
+    }
+
+    function ibdConfidence(heightDeglitch) {
+      const valid = heightDeglitch.filter((p) => p.y !== null);
+      if (valid.length < 2) return { score: 0, amplitudeCm: 0, sampleCount: valid.length };
+
+      const latestMs = valid[valid.length - 1].pc_time_ms;
+      const recent = Number.isFinite(latestMs)
+        ? valid.filter((p) => Number.isFinite(p.pc_time_ms) && latestMs - p.pc_time_ms <= IBD_MICRO_MOTION_WINDOW_MS)
+        : valid.slice(-Math.min(valid.length, 200));
+      const windowPoints = recent.length >= 2 ? recent : valid.slice(-Math.min(valid.length, 2));
+      const valuesCm = windowPoints.map((p) => p.y * 100);
+      const amplitudeCm = Math.max(...valuesCm) - Math.min(...valuesCm);
+      const score = Math.max(0, Math.min(1, amplitudeCm / IBD_TRUSTED_AMPLITUDE_CM));
+      return { score, amplitudeCm, sampleCount: windowPoints.length };
+    }
+
+    function labelStateForHeight(heightCm, heightDeglitch) {
+      const state = classifyHeightState(heightCm);
+      if (!state) return { stateText: "UNK", confidence: 0, amplitudeCm: 0 };
+      if (state.state !== "IBD") return { stateText: state.state, confidence: 1, amplitudeCm: null };
+
+      const confidence = ibdConfidence(heightDeglitch);
+      const stateText = confidence.amplitudeCm < IBD_FLAT_AMPLITUDE_CM ? "IBD_UNTRUSTED" : "IBD";
+      return { stateText, confidence: confidence.score, amplitudeCm: confidence.amplitudeCm };
     }
 
     function renderStateTable() {
@@ -718,7 +746,7 @@
       for (let i = 0; i < points.length; i += 1) {
         const value = points[i][key];
         if (value === null) {
-          out.push({ fn: points[i].fn, y: null, changed: false });
+          out.push({ fn: points[i].fn, pc_time_ms: points[i].pc_time_ms, y: null, changed: false });
           continue;
         }
 
@@ -726,7 +754,7 @@
         const b = Math.min(points.length, i + half + 1);
         const local = median(points.slice(a, b).map((p) => p[key]).filter((v) => v !== null));
         if (local === null) {
-          out.push({ fn: points[i].fn, y: value, changed: false });
+          out.push({ fn: points[i].fn, pc_time_ms: points[i].pc_time_ms, y: value, changed: false });
           prevValid = value;
           continue;
         }
@@ -735,7 +763,7 @@
         const jump = prevValid !== null && Math.abs(value - prevValid) > jumpTh && Math.abs(local - prevValid) <= jumpTh;
         const changed = spike || jump;
         const y = changed ? local : value;
-        out.push({ fn: points[i].fn, y, changed });
+        out.push({ fn: points[i].fn, pc_time_ms: points[i].pc_time_ms, y, changed });
         prevValid = y;
       }
 
@@ -819,7 +847,7 @@
       if (els.showHeight.checked) drawLinePoints(ctx, heightDeglitch, colors.height, sx, sy);
       if (els.showHeight.checked && els.showDeglitch.checked) drawDeglitchDots(ctx, heightDeglitch, colors.deglitch, sx, sy);
       if (els.showR0Deglitch.checked) drawDeglitchDots(ctx, deglitchR0(points), colors.r0Deglitch, sx, sy);
-      if (els.showHeight.checked) drawHeightPeak(ctx, heightPeak(heightDeglitch, Number(els.fwRoi.value) || 20), colors.peak, sx, sy);
+      if (els.showHeight.checked) drawHeightPeak(ctx, heightPeak(heightDeglitch, Number(els.fwRoi.value) || 20), heightDeglitch, colors.peak, sx, sy);
     }
 
     function drawAxes(ctx, box, minFn, maxFn, minY, maxY) {
@@ -937,13 +965,13 @@
       ctx.stroke();
     }
 
-    function drawHeightPeak(ctx, peak, color, sx, sy) {
+    function drawHeightPeak(ctx, peak, heightDeglitch, color, sx, sy) {
       if (!peak || peak.y === null) return;
       const x = sx(peak.fn);
       const y = sy(peak.y);
       const heightCm = Math.round(peak.y * 100);
-      const state = classifyHeightState(heightCm);
-      const label = `${heightCm} cm, ${state ? state.state : "UNK"}`;
+      const state = labelStateForHeight(heightCm, heightDeglitch);
+      const label = `${heightCm} cm, ${state.stateText}, conf=${state.confidence.toFixed(2)}`;
 
       ctx.fillStyle = color;
       ctx.strokeStyle = "#ffffff";
