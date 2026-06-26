@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V22 2026.06.26 14:29</title>
+  <title>A1528B eSRD Range Profile Web UART V23 2026.06.26 14:37</title>
   <style>
     :root {
       color-scheme: light;
@@ -286,7 +286,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V22 2026.06.26 14:29</h1>
+    <h1>A1528B eSRD Range Profile Web UART V23 2026.06.26 14:37</h1>
     <div class="status" id="status">Ready.</div>
   </header>
 
@@ -330,6 +330,11 @@
           <span class="note" id="fwRoiLabel">20 frames</span>
         </label>
         <label>
+          height_TH
+          <input id="heightThCm" type="range" min="20" max="240" step="1" value="120">
+          <span class="note" id="heightThLabel">120 cm</span>
+        </label>
+        <label>
           CALI
           <input id="caliCm" type="range" min="-10" max="10" step="1" value="0">
           <span class="note" id="caliLabel">0 cm</span>
@@ -364,7 +369,7 @@
 
     <section class="plot-wrap">
       <div class="plot-area">
-        <textarea id="historyLog" class="history-log" readonly placeholder="Peak history after height <= 20 cm trigger: (index, height)"></textarea>
+        <textarea id="historyLog" class="history-log" readonly placeholder="Peak history after height <= 20 cm trigger and peak > height_TH: (index, height)"></textarea>
         <canvas id="plot" width="1200" height="650"></canvas>
       </div>
       <div class="metrics">
@@ -394,6 +399,8 @@
       windowSize: document.getElementById("windowSize"),
       fwRoi: document.getElementById("fwRoi"),
       fwRoiLabel: document.getElementById("fwRoiLabel"),
+      heightThCm: document.getElementById("heightThCm"),
+      heightThLabel: document.getElementById("heightThLabel"),
       caliCm: document.getElementById("caliCm"),
       caliLabel: document.getElementById("caliLabel"),
       refreshPorts: document.getElementById("refreshPorts"),
@@ -425,6 +432,8 @@
     };
 
     const CALI_STORAGE_KEY = "a1528b_esrd_cali_cm";
+    const FW_ROI_STORAGE_KEY = "a1528b_esrd_fw_roi";
+    const DEFAULT_HISTORY_HEIGHT_TH_CM = 120;
     const HISTORY_ARM_HEIGHT_CM = 20;
 
     const colors = {
@@ -471,6 +480,38 @@
 
     function caliMeters() {
       return (Number(els.caliCm.value) || 0) / 100;
+    }
+
+    function syncFwRoiLabel() {
+      els.fwRoiLabel.textContent = `${els.fwRoi.value} frames`;
+    }
+
+    function syncHeightThLabel() {
+      els.heightThLabel.textContent = `${els.heightThCm.value} cm`;
+    }
+
+    function historyHeightThCm() {
+      return Number(els.heightThCm.value) || DEFAULT_HISTORY_HEIGHT_TH_CM;
+    }
+
+    function loadSavedFwRoi() {
+      try {
+        const saved = window.localStorage.getItem(FW_ROI_STORAGE_KEY);
+        if (saved === null) return;
+        const value = Math.max(5, Math.min(200, Number.parseInt(saved, 10)));
+        if (Number.isFinite(value)) els.fwRoi.value = String(value);
+      } catch (_err) {
+        // Storage can be unavailable in restricted browser modes.
+      }
+      syncFwRoiLabel();
+    }
+
+    function saveFwRoi() {
+      try {
+        window.localStorage.setItem(FW_ROI_STORAGE_KEY, els.fwRoi.value);
+      } catch (_err) {
+        // Keep FW_ROI usable even when persistence is blocked.
+      }
     }
 
     function syncCaliLabel() {
@@ -684,6 +725,7 @@
     function commitPeakHistoryCandidate() {
       if (!state.peakCandidate || state.peakCandidate.y === null) return;
       const heightCm = Math.round(state.peakCandidate.y * 100);
+      if (heightCm <= historyHeightThCm()) return;
       state.peakHistorySeq += 1;
       state.peakHistory.push({ index: state.peakHistorySeq, heightCm, fn: state.peakCandidate.fn });
       if (state.peakHistory.length > 500) state.peakHistory.shift();
@@ -1045,8 +1087,16 @@
     els.downloadCsv.addEventListener("click", downloadCsv);
     els.downloadLog.addEventListener("click", downloadLog);
     els.fwRoi.addEventListener("input", () => {
-      els.fwRoiLabel.textContent = `${els.fwRoi.value} frames`;
+      syncFwRoiLabel();
       drawPlot();
+    });
+    els.fwRoi.addEventListener("change", () => {
+      syncFwRoiLabel();
+      saveFwRoi();
+      setStatus(`Saved FW_ROI ${els.fwRoi.value} frames for next open.`);
+    });
+    els.heightThCm.addEventListener("input", () => {
+      syncHeightThLabel();
     });
     els.caliCm.addEventListener("input", () => {
       syncCaliLabel();
@@ -1068,7 +1118,9 @@
     if (!("serial" in navigator)) {
       setStatus("Web Serial needs Chrome or Edge over HTTPS.");
     }
+    loadSavedFwRoi();
     loadSavedCali();
+    syncHeightThLabel();
     syncLegendColors();
     refreshPorts();
     updateMetrics();
