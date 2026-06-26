@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V12 2026.06.26 11:33</title>
+  <title>A1528B eSRD Range Profile Web UART V14 2026.06.26 12:25</title>
   <style>
     :root {
       color-scheme: light;
@@ -17,7 +17,7 @@
       --r1: #00a000;
       --r2: #0000ff;
       --height: #facc15;
-      --deglitch: #16a34a;
+      --deglitch: #60a5fa;
       --peak: #2563eb;
     }
 
@@ -256,7 +256,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V12 2026.06.26 11:33</h1>
+    <h1>A1528B eSRD Range Profile Web UART V14 2026.06.26 12:25</h1>
     <div class="status" id="status">Ready.</div>
   </header>
 
@@ -311,11 +311,12 @@
       </div>
 
       <div class="group checks">
-        <label><input id="showR0" type="checkbox" checked> r0</label>
+        <label><input id="showR0" type="checkbox"> r0</label>
         <label><input id="showR1" type="checkbox"> r1</label>
         <label><input id="showR2" type="checkbox"> r2</label>
         <label><input id="showHeight" type="checkbox" checked> height</label>
-        <label><input id="showDeglitch" type="checkbox" checked> deglitch dots</label>
+        <label><input id="showDeglitch" type="checkbox" checked> height deglitch dots</label>
+        <label><input id="showR0Deglitch" type="checkbox"> r0 deglitch</label>
       </div>
 
       <div class="group">
@@ -345,7 +346,7 @@
             <span id="legendR1"><i class="swatch"></i>r1</span>
             <span id="legendR2"><i class="swatch"></i>r2</span>
             <span id="legendHeight"><i class="swatch"></i>height=2.4-r0</span>
-            <span id="legendDeglitch"><i class="swatch"></i>deglitch</span>
+            <span id="legendDeglitch"><i class="swatch"></i>height deglitch</span>
             <span id="legendPeak"><i class="swatch"></i>height peak</span>
           </div>
         </div>
@@ -371,6 +372,7 @@
       showR2: document.getElementById("showR2"),
       showHeight: document.getElementById("showHeight"),
       showDeglitch: document.getElementById("showDeglitch"),
+      showR0Deglitch: document.getElementById("showR0Deglitch"),
       downloadCsv: document.getElementById("downloadCsv"),
       downloadLog: document.getElementById("downloadLog"),
       clearData: document.getElementById("clearData"),
@@ -393,7 +395,8 @@
       r1: "#00a000",
       r2: "#0000ff",
       height: "#facc15",
-      deglitch: "#16a34a",
+      deglitch: "#60a5fa",
+      r0Deglitch: "#16a34a",
       peak: "#2563eb",
       grid: "#d9dee7",
       axis: "#667085",
@@ -730,7 +733,8 @@
       if (els.showR2.checked) drawSeries(ctx, points, "r2", colors.r2, sx, sy);
       const heightDeglitch = deglitchHeight(points);
       if (els.showHeight.checked) drawLinePoints(ctx, heightDeglitch, colors.height, sx, sy);
-      if (els.showDeglitch.checked) drawDeglitchDots(ctx, deglitchR0(points), colors.deglitch, sx, sy);
+      if (els.showHeight.checked && els.showDeglitch.checked) drawDeglitchDots(ctx, heightDeglitch, colors.deglitch, sx, sy);
+      if (els.showR0Deglitch.checked) drawDeglitchDots(ctx, deglitchR0(points), colors.r0Deglitch, sx, sy);
       if (els.showHeight.checked) drawHeightPeak(ctx, heightPeak(heightDeglitch, Number(els.fwRoi.value) || 20), colors.peak, sx, sy);
     }
 
@@ -938,7 +942,7 @@
       els.caliLabel.textContent = `${els.caliCm.value} cm`;
       drawPlot();
     });
-    for (const el of [els.windowSize, els.showR0, els.showR1, els.showR2, els.showHeight, els.showDeglitch]) {
+    for (const el of [els.windowSize, els.showR0, els.showR1, els.showR2, els.showHeight, els.showDeglitch, els.showR0Deglitch]) {
       el.addEventListener("input", drawPlot);
     }
     window.addEventListener("resize", resizeCanvas);
