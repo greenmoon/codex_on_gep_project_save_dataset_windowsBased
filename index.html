@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Height Measurement Monitor by Joybien Technologies V40 2026.06.29 14:20</title>
+  <title>Height Measurement Monitor by Joybien Technologies V41 2026.06.29 14:25</title>
   <style>
     :root {
       color-scheme: light;
@@ -386,7 +386,7 @@
 </head>
 <body>
   <header>
-    <h1>Height Measurement Monitor by Joybien Technologies V40 2026.06.29 14:20</h1>
+    <h1>Height Measurement Monitor by Joybien Technologies V41 2026.06.29 14:25</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -623,6 +623,26 @@
 
     function setStatus(text) {
       els.status.textContent = text;
+    }
+
+    async function enterContentOnlyView() {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        try {
+          await document.documentElement.requestFullscreen();
+        } catch (err) {
+          setStatus("Use F11 or open_global_kiosk.bat for content-only display.");
+        }
+      }
+    }
+
+    async function exitContentOnlyView() {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try {
+          await document.exitFullscreen();
+        } catch (err) {
+          setStatus("Press Esc or F11 to leave content-only display.");
+        }
+      }
     }
 
     function setDisplayMode(mode) {
@@ -1489,8 +1509,8 @@
 
     els.connect.addEventListener("click", connectSerial);
     els.disconnect.addEventListener("click", disconnectSerial);
-    els.modeRd.addEventListener("click", () => setDisplayMode("rd"));
-    els.modeDashboard.addEventListener("click", () => setDisplayMode("dashboard"));
+    els.modeRd.addEventListener("click", () => { setDisplayMode("rd"); exitContentOnlyView(); });
+    els.modeDashboard.addEventListener("click", () => { setDisplayMode("dashboard"); enterContentOnlyView(); });
     els.refreshPorts.addEventListener("click", refreshPorts);
     els.clearData.addEventListener("click", clearData);
     els.downloadCsv.addEventListener("click", downloadCsv);
