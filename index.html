@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V35 2026.06.29 13:18 completed</title>
+  <title>A1528B eSRD Range Profile Web UART V36 2026.06.29 13:28 completed</title>
   <style>
     :root {
       color-scheme: light;
@@ -371,7 +371,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V35 2026.06.29 13:18 completed</h1>
+    <h1>A1528B eSRD Range Profile Web UART V36 2026.06.29 13:28 completed</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -569,6 +569,7 @@
     const EMPTY_HOLD_MS = 1500;
     const MIN_VALID_HEIGHT_CM = 60;
     const MAX_VALID_HEIGHT_CM = 210;
+    const PEAK_FALL_DELTA_M = 0.03;
 
     const colors = {
       r0: "#ff0000",
@@ -604,6 +605,9 @@
       dashboardHeightSum: 0,
       dashboardEmptySinceMs: null,
       dashboardLastValidText: null,
+      dashboardMeasureState: "EMPTY",
+      dashboardPeakHeight: null,
+      dashboardPrevStableHeight: null,
       portMap: new Map()
     };
 
@@ -649,6 +653,16 @@
       return cliffs >= SMART_EMPTY_MIN_CLIFFS && (maxH - minH) >= SMART_EMPTY_RANGE_M;
     }
 
+    function resetDashboardMeasurement() {
+      state.dashboardHeightQueue = [];
+      state.dashboardHeightSum = 0;
+      state.dashboardEmptySinceMs = null;
+      state.dashboardLastValidText = null;
+      state.dashboardMeasureState = "EMPTY";
+      state.dashboardPeakHeight = null;
+      state.dashboardPrevStableHeight = null;
+    }
+
     function updateStableDashboardHeight(heightMeters) {
       const emptyNow = isEmptyHeightMeters(heightMeters) || isSmartEmptyHeight();
       const nowMs = Date.now();
@@ -658,8 +672,7 @@
           els.dashboardHeight.textContent = state.dashboardLastValidText;
           return;
         }
-        state.dashboardHeightQueue = [];
-        state.dashboardHeightSum = 0;
+        resetDashboardMeasurement();
         els.dashboardHeight.textContent = "EMPTY";
         return;
       }
@@ -672,8 +685,29 @@
       }
       const stableHeight = state.dashboardHeightSum / state.dashboardHeightQueue.length;
       const stableText = formatHeightCm(stableHeight);
-      state.dashboardLastValidText = stableText;
-      els.dashboardHeight.textContent = stableText;
+
+      if (state.dashboardMeasureState === "EMPTY") {
+        state.dashboardMeasureState = "ACTIVE_LOW_to_HIGH";
+        state.dashboardPeakHeight = stableHeight;
+      } else if (state.dashboardMeasureState === "ACTIVE_LOW_to_HIGH") {
+        if (stableHeight >= state.dashboardPeakHeight) {
+          state.dashboardPeakHeight = stableHeight;
+        } else if (state.dashboardPeakHeight - stableHeight >= PEAK_FALL_DELTA_M) {
+          state.dashboardMeasureState = "FOUND_PEAK";
+        }
+      } else if (state.dashboardMeasureState === "FOUND_PEAK") {
+        state.dashboardMeasureState = "ACTIVE_HIGH_to_LOW";
+      } else if (state.dashboardMeasureState === "ACTIVE_HIGH_to_LOW" && stableHeight > state.dashboardPeakHeight) {
+        state.dashboardMeasureState = "ACTIVE_LOW_to_HIGH";
+        state.dashboardPeakHeight = stableHeight;
+      }
+
+      const showPeak = state.dashboardMeasureState === "FOUND_PEAK" || state.dashboardMeasureState === "ACTIVE_HIGH_to_LOW";
+      const displayHeight = showPeak && state.dashboardPeakHeight !== null ? state.dashboardPeakHeight : stableHeight;
+      const displayText = formatHeightCm(displayHeight);
+      state.dashboardPrevStableHeight = stableHeight;
+      state.dashboardLastValidText = displayText;
+      els.dashboardHeight.textContent = displayText;
     }
 
     function setMqttStatus(text) {
@@ -1047,10 +1081,7 @@
       state.peakHistoryState = "IDLE";
       state.peakCandidate = null;
       state.badCount = 0;
-      state.dashboardHeightQueue = [];
-      state.dashboardHeightSum = 0;
-      state.dashboardEmptySinceMs = null;
-      state.dashboardLastValidText = null;
+      resetDashboardMeasurement();
       updateMetrics();
       updateHistoryLog();
       drawPlot();
