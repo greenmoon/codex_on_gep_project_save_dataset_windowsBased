@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Height Measurement Monitor by Joybien Technologies V41 2026.06.29 14:25</title>
+  <title>Height Measurement Monitor by Joybien Technologies V42 2026.06.29 14:34</title>
   <style>
     :root {
       color-scheme: light;
@@ -386,7 +386,7 @@
 </head>
 <body>
   <header>
-    <h1>Height Measurement Monitor by Joybien Technologies V41 2026.06.29 14:25</h1>
+    <h1>Height Measurement Monitor by Joybien Technologies V42 2026.06.29 14:34</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -572,6 +572,7 @@
     const CALI_STORAGE_KEY = "a1528b_esrd_cali_cm";
     const FW_ROI_STORAGE_KEY = "a1528b_esrd_fw_roi";
     const HEIGHT_TH_STORAGE_KEY = "a1528b_esrd_height_th_cm";
+    const DEFAULT_UART_STORAGE_KEY = "a1528b_esrd_default_uart";
     const DEFAULT_HISTORY_HEIGHT_TH_CM = 120;
     const HISTORY_IDLE_HEIGHT_CM = 50;
     const SMART_EMPTY_WINDOW = 20;
@@ -618,7 +619,10 @@
       dashboardMeasureState: "EMPTY",
       dashboardPeakHeight: null,
       dashboardPrevStableHeight: null,
-      portMap: new Map()
+      portMap: new Map(),
+      currentPortLabel: "",
+      uartDefaultSaved: false,
+      defaultUartTried: false
     };
 
     function setStatus(text) {
@@ -825,6 +829,69 @@
       }
     }
 
+    function portSignature(port, label = "") {
+      const info = port && port.getInfo ? port.getInfo() : {};
+      return {
+        label,
+        usbVendorId: info.usbVendorId || null,
+        usbProductId: info.usbProductId || null,
+        savedAt: new Date().toISOString()
+      };
+    }
+
+    function loadDefaultUart() {
+      try {
+        const saved = window.localStorage.getItem(DEFAULT_UART_STORAGE_KEY);
+        return saved ? JSON.parse(saved) : null;
+      } catch (_err) {
+        return null;
+      }
+    }
+
+    function saveDefaultUart(port, label) {
+      try {
+        window.localStorage.setItem(DEFAULT_UART_STORAGE_KEY, JSON.stringify(portSignature(port, label)));
+      } catch (_err) {
+        // The app can still connect manually if persistence is unavailable.
+      }
+    }
+
+    function samePortSignature(port, saved) {
+      if (!port || !saved) return false;
+      const info = port.getInfo ? port.getInfo() : {};
+      if (saved.usbVendorId || saved.usbProductId) {
+        return (info.usbVendorId || null) === saved.usbVendorId && (info.usbProductId || null) === saved.usbProductId;
+      }
+      return false;
+    }
+
+    function confirmDefaultUartPort() {
+      if (!state.port || state.uartDefaultSaved) return;
+      saveDefaultUart(state.port, state.currentPortLabel || els.comPort.value || "Authorized port");
+      state.uartDefaultSaved = true;
+      setStatus(`Radar data confirmed. Saved ${state.currentPortLabel || "UART port"} as default for next open.`);
+    }
+
+    async function tryDefaultUartConnect() {
+      if (!("serial" in navigator) || state.defaultUartTried || state.port) return;
+      state.defaultUartTried = true;
+      const saved = loadDefaultUart();
+      if (!saved) return;
+      try {
+        const ports = await navigator.serial.getPorts();
+        const port = ports.find((candidate) => samePortSignature(candidate, saved));
+        if (!port) {
+          setStatus("Saved UART default not authorized now. Use Connect UART to select the port.");
+          return;
+        }
+        const label = saved.label || "Saved UART port";
+        setStatus(`Trying saved UART default ${label}...`);
+        await connectSerial(port, label, true);
+      } catch (err) {
+        setStatus(`Saved UART default failed: ${err.message}. Use Connect UART to select manually.`);
+      }
+    }
+
     function formatTimeTag(date = new Date()) {
       const p = (n) => String(n).padStart(2, "0");
       return `${date.getFullYear()}.${p(date.getMonth() + 1)}.${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`;
@@ -982,31 +1049,34 @@
       }
 
       state.records.push(rec);
+      confirmDefaultUartPort();
       if (state.records.length > 20000) state.records.shift();
       updateMetrics();
       requestDraw();
     }
 
-    async function connectSerial() {
+    async function connectSerial(portOverride = null, labelOverride = "", isDefaultAttempt = false) {
       if (!("serial" in navigator)) {
         setStatus("Web Serial is not available in this browser.");
         return;
       }
 
       const baudRate = Number(els.baudRate.value) || 921600;
-      const preferredPort = els.comPort.value || "COM5";
+      const preferredPort = labelOverride || els.comPort.value || "COM5";
       try {
-        setStatus(`Select ${preferredPort} in the browser port picker.`);
-        state.port = state.portMap.get(preferredPort) || await navigator.serial.requestPort();
+        if (!portOverride) setStatus(`Select ${preferredPort} in the browser port picker.`);
+        state.port = portOverride || state.portMap.get(preferredPort) || await navigator.serial.requestPort();
+        state.currentPortLabel = preferredPort;
+        state.uartDefaultSaved = false;
         await state.port.open({ baudRate });
         setConnected(true);
         await refreshPorts();
-        setStatus(`Connected ${preferredPort} @ ${baudRate}`);
+        setStatus(`${isDefaultAttempt ? "Connected saved default" : "Connected"} ${preferredPort} @ ${baudRate}. Waiting for radar data...`);
         state.reading = true;
         await readLoop();
       } catch (err) {
-        setStatus(`Connect failed: ${err.message}`);
-        await disconnectSerial();
+        await disconnectSerial(false);
+        setStatus(`${isDefaultAttempt ? "Saved UART default failed" : "Connect failed"}: ${err.message}. Use Connect UART to select manually.`);
       }
     }
 
@@ -1076,7 +1146,7 @@
       }
     }
 
-    async function disconnectSerial() {
+    async function disconnectSerial(showStatus = true) {
       state.reading = false;
       if (state.reader) {
         try {
@@ -1091,8 +1161,10 @@
         }
       }
       state.port = null;
+      state.currentPortLabel = "";
+      state.uartDefaultSaved = false;
       setConnected(false);
-      setStatus("Disconnected.");
+      if (showStatus) setStatus("Disconnected.");
     }
 
     function clearData() {
@@ -1561,7 +1633,7 @@
     loadSavedHeightTh();
     loadSavedCali();
     syncLegendColors();
-    refreshPorts();
+    refreshPorts().then(tryDefaultUartConnect);
     updateMetrics();
     updateHistoryLog();
     resizeCanvas();
