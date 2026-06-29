@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V29 2026.06.29 12:07 completed</title>
+  <title>A1528B eSRD Range Profile Web UART V30 2026.06.29 12:26 completed</title>
   <style>
     :root {
       color-scheme: light;
@@ -36,7 +36,7 @@
 
     header {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 16px;
       align-items: center;
       height: 56px;
@@ -50,6 +50,34 @@
       font-size: 20px;
       font-weight: 700;
       letter-spacing: 0;
+    }
+
+    .mode-switch {
+      display: inline-grid;
+      grid-template-columns: auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .mode-switch button {
+      min-width: 112px;
+      border-width: 2px;
+      color: #ffffff;
+    }
+
+    .mode-switch button[data-mode="rd"] {
+      background: #dc2626;
+      border-color: #dc2626;
+    }
+
+    .mode-switch button[data-mode="dashboard"] {
+      background: #16a34a;
+      border-color: #16a34a;
+    }
+
+    .mode-switch button:not(.active) {
+      opacity: 0.56;
+      filter: grayscale(0.35);
     }
 
     .status {
@@ -236,6 +264,60 @@
       font-size: 12px;
     }
 
+    .dashboard-panel {
+      display: none;
+      min-height: 0;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .dashboard-height {
+      display: grid;
+      gap: 6px;
+      padding: 18px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .dashboard-height span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .dashboard-height b {
+      color: #16a34a;
+      font-size: 54px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    body.dashboard-mode main {
+      grid-template-columns: 1fr;
+    }
+
+    body.dashboard-mode aside,
+    body.dashboard-mode .plot-area,
+    body.dashboard-mode .metrics {
+      display: none;
+    }
+
+    body.dashboard-mode .plot-wrap {
+      grid-template-rows: minmax(0, 1fr);
+      padding: 16px;
+    }
+
+    body.dashboard-mode .dashboard-panel {
+      display: grid;
+    }
+
+    body.dashboard-mode .history-log {
+      font-size: 20px;
+      line-height: 1.55;
+    }
+
     .history-log {
       width: 100%;
       height: 100%;
@@ -286,7 +368,11 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V29 2026.06.29 12:07 completed</h1>
+    <h1>A1528B eSRD Range Profile Web UART V30 2026.06.29 12:26 completed</h1>
+    <div class="mode-switch" aria-label="Display mode">
+      <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
+      <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
+    </div>
     <div class="status" id="status">Ready.</div>
   </header>
 
@@ -392,6 +478,10 @@
         <textarea id="historyLog" class="history-log" readonly placeholder="Peak history: (index, height_cm, time_tag)"></textarea>
         <canvas id="plot" width="1200" height="650"></canvas>
       </div>
+      <div class="dashboard-panel" id="dashboardPanel">
+        <div class="dashboard-height"><span>Height</span><b id="dashboardHeight">-</b></div>
+        <textarea id="dashboardHistoryLog" class="history-log" readonly placeholder="Peak history"></textarea>
+      </div>
       <div class="metrics">
         <div class="metric"><span>Records</span><b id="count">0</b></div>
         <div class="metric"><span>Bad JSON</span><b id="badCount">0</b></div>
@@ -415,6 +505,10 @@
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script>
     const els = {
+      modeRd: document.getElementById("modeRd"),
+      modeDashboard: document.getElementById("modeDashboard"),
+      dashboardHeight: document.getElementById("dashboardHeight"),
+      dashboardHistoryLog: document.getElementById("dashboardHistoryLog"),
       comPort: document.getElementById("comPort"),
       baudRate: document.getElementById("baudRate"),
       windowSize: document.getElementById("windowSize"),
@@ -494,11 +588,27 @@
       mqttTestTimer: null,
       mqttTestSeq: 0,
       badCount: 0,
+      displayMode: "rd",
       portMap: new Map()
     };
 
     function setStatus(text) {
       els.status.textContent = text;
+    }
+
+    function setDisplayMode(mode) {
+      state.displayMode = mode;
+      document.body.classList.toggle("dashboard-mode", mode === "dashboard");
+      els.modeRd.classList.toggle("active", mode === "rd");
+      els.modeDashboard.classList.toggle("active", mode === "dashboard");
+      resizeCanvas();
+      drawPlot();
+    }
+
+    function formatHeightCm(heightMeters) {
+      if (heightMeters === null || !Number.isFinite(heightMeters)) return "-";
+      const heightCm = heightMeters * 100;
+      return heightCm >= 210 ? "Scanning" : `${heightCm.toFixed(1)} cm`;
     }
 
     function setMqttStatus(text) {
@@ -879,17 +989,20 @@
     }
 
     function updateHistoryLog() {
-      els.historyLog.value = state.peakHistory.map((item) => item.text).join("\n");
+      const historyText = state.peakHistory.map((item) => item.text).join("\n");
+      els.historyLog.value = historyText;
+      els.dashboardHistoryLog.value = historyText;
       els.historyLog.scrollTop = els.historyLog.scrollHeight;
+      els.dashboardHistoryLog.scrollTop = els.dashboardHistoryLog.scrollHeight;
     }
 
     function commitPeakHistoryCandidate() {
       if (!state.peakCandidate || state.peakCandidate.y === null) return;
-      const heightCm = Math.round(state.peakCandidate.y * 100);
+      const heightCm = state.peakCandidate.y * 100;
       if (heightCm <= historyHeightThCm()) return;
       state.peakHistorySeq += 1;
       const timeTag = formatTimeTag();
-      const text = `(${state.peakHistorySeq}, ${heightCm} cm, ${timeTag})`;
+      const text = `(${state.peakHistorySeq}, ${heightCm.toFixed(1)} cm, ${timeTag})`;
       state.peakHistory.push({ index: state.peakHistorySeq, heightCm, timeTag, fn: state.peakCandidate.fn, text });
       if (state.peakHistory.length > 500) state.peakHistory.shift();
       updateHistoryLog();
@@ -925,6 +1038,7 @@
       els.badCount.textContent = String(state.badCount);
       els.lastFn.textContent = last ? String(last.fn) : "-";
       els.lastR0.textContent = last && last.r0 !== null ? last.r0.toFixed(3) : "-";
+      els.dashboardHeight.textContent = last ? formatHeightCm(calibratedHeight(last)) : "-";
     }
 
     function median(values) {
@@ -1174,8 +1288,7 @@
       if (!peak || peak.y === null) return;
       const x = sx(peak.fn);
       const y = sy(peak.y);
-      const heightCm = Math.round(peak.y * 100);
-      const label = heightCm >= 210 ? "Scanning" : `${heightCm} cm`;
+      const label = formatHeightCm(peak.y);
 
       ctx.fillStyle = color;
       ctx.strokeStyle = "#ffffff";
@@ -1248,6 +1361,8 @@
 
     els.connect.addEventListener("click", connectSerial);
     els.disconnect.addEventListener("click", disconnectSerial);
+    els.modeRd.addEventListener("click", () => setDisplayMode("rd"));
+    els.modeDashboard.addEventListener("click", () => setDisplayMode("dashboard"));
     els.refreshPorts.addEventListener("click", refreshPorts);
     els.clearData.addEventListener("click", clearData);
     els.downloadCsv.addEventListener("click", downloadCsv);
