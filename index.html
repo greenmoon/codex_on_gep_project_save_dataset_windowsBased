@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V37 2026.06.29 13:48 completed</title>
+  <title>Height Measurement Monitor by Joybien Technologies V38 2026.06.29 13:56</title>
   <style>
     :root {
       color-scheme: light;
@@ -267,8 +267,9 @@
     .dashboard-panel {
       display: none;
       min-height: 0;
-      grid-template-rows: auto minmax(0, 1fr);
-      gap: 14px;
+      align-content: center;
+      justify-content: center;
+      padding: 18px;
     }
 
     .dashboard-height {
@@ -297,8 +298,21 @@
       white-space: nowrap;
     }
 
+    body.dashboard-mode header {
+      grid-template-columns: auto;
+      justify-content: center;
+      height: 64px;
+    }
+
+    body.dashboard-mode h1,
+    body.dashboard-mode .status {
+      display: none;
+    }
+
     body.dashboard-mode main {
       grid-template-columns: 1fr;
+      height: calc(100vh - 64px);
+      background: #ffffff;
     }
 
     body.dashboard-mode aside,
@@ -309,7 +323,8 @@
 
     body.dashboard-mode .plot-wrap {
       grid-template-rows: minmax(0, 1fr);
-      padding: 16px;
+      padding: 0;
+      background: #ffffff;
     }
 
     body.dashboard-mode .dashboard-panel {
@@ -371,7 +386,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V37 2026.06.29 13:48 completed</h1>
+    <h1>Height Measurement Monitor by Joybien Technologies V38 2026.06.29 13:56</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -483,7 +498,6 @@
       </div>
       <div class="dashboard-panel" id="dashboardPanel">
         <div class="dashboard-height"><span>Your height is</span><b id="dashboardHeight">-</b></div>
-        <textarea id="dashboardHistoryLog" class="history-log" readonly placeholder="Peak history"></textarea>
       </div>
       <div class="metrics">
         <div class="metric"><span>Records</span><b id="count">0</b></div>
@@ -511,7 +525,6 @@
       modeRd: document.getElementById("modeRd"),
       modeDashboard: document.getElementById("modeDashboard"),
       dashboardHeight: document.getElementById("dashboardHeight"),
-      dashboardHistoryLog: document.getElementById("dashboardHistoryLog"),
       comPort: document.getElementById("comPort"),
       baudRate: document.getElementById("baudRate"),
       windowSize: document.getElementById("windowSize"),
@@ -1080,9 +1093,7 @@
     function updateHistoryLog() {
       const historyText = state.peakHistory.map((item) => item.text).join("\n");
       els.historyLog.value = historyText;
-      els.dashboardHistoryLog.value = historyText;
       els.historyLog.scrollTop = els.historyLog.scrollHeight;
-      els.dashboardHistoryLog.scrollTop = els.dashboardHistoryLog.scrollHeight;
     }
 
     function commitPeakHistoryCandidate() {
