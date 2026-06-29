@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A1528B eSRD Range Profile Web UART V32 2026.06.29 12:42 completed</title>
+  <title>A1528B eSRD Range Profile Web UART V33 2026.06.29 12:56 completed</title>
   <style>
     :root {
       color-scheme: light;
@@ -371,7 +371,7 @@
 </head>
 <body>
   <header>
-    <h1>A1528B eSRD Range Profile Web UART V32 2026.06.29 12:42 completed</h1>
+    <h1>A1528B eSRD Range Profile Web UART V33 2026.06.29 12:56 completed</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -614,7 +614,7 @@
     function formatHeightCm(heightMeters) {
       if (heightMeters === null || !Number.isFinite(heightMeters)) return "-";
       const heightCm = heightMeters * 100;
-      return heightCm >= 210 ? "Scanning" : `${heightCm.toFixed(1)} cm`;
+      return heightCm >= 210 ? "EMPTY" : `${heightCm.toFixed(1)} cm`;
     }
 
     function updateStableDashboardHeight(heightMeters) {
@@ -1021,6 +1021,7 @@
     function commitPeakHistoryCandidate() {
       if (!state.peakCandidate || state.peakCandidate.y === null) return;
       const heightCm = state.peakCandidate.y * 100;
+      if (heightCm >= 210) return;
       if (heightCm <= historyHeightThCm()) return;
       state.peakHistorySeq += 1;
       const timeTag = formatTimeTag();
