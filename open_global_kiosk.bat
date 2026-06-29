@@ -1,3 +1,3 @@
 @echo off
-set "URL=https://greenmoon.github.io/codex_on_gep_project_save_dataset_windowsBased/?v=V42-default-uart"
+set "URL=https://greenmoon.github.io/codex_on_gep_project_save_dataset_windowsBased/?v=V44-black-dashboard"
 start "" chrome.exe --kiosk --new-window "%URL%"

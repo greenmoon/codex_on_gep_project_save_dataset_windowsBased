@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Height Measurement Monitor by Joybien Technologies V42 2026.06.29 14:34</title>
+  <title>Height Measurement Monitor by Joybien Technologies V44 2026.06.29 14:49</title>
   <style>
     :root {
       color-scheme: light;
@@ -277,7 +277,7 @@
       justify-items: center;
       gap: 12px;
       padding: 28px 18px;
-      background: #f3f4f6;
+      background: #9ca3af;
       border: 2px solid #16a34a;
       border-radius: 6px;
       text-align: center;
@@ -309,10 +309,24 @@
       display: none;
     }
 
+
+    body.dashboard-mode {
+      background: #000000;
+    }
+
+    body.dashboard-mode header {
+      background: #000000;
+      border-bottom-color: #000000;
+    }
+
+    body.dashboard-mode h1,
+    body.dashboard-mode .status {
+      color: #ffffff;
+    }
     body.dashboard-mode main {
       grid-template-columns: 1fr;
       height: calc(100vh - 64px);
-      background: #e5e7eb;
+      background: #000000;
     }
 
     body.dashboard-mode aside,
@@ -324,7 +338,7 @@
     body.dashboard-mode .plot-wrap {
       grid-template-rows: minmax(0, 1fr);
       padding: 0;
-      background: #e5e7eb;
+      background: #000000;
     }
 
     body.dashboard-mode .dashboard-panel {
@@ -386,7 +400,7 @@
 </head>
 <body>
   <header>
-    <h1>Height Measurement Monitor by Joybien Technologies V42 2026.06.29 14:34</h1>
+    <h1>Height Measurement Monitor by Joybien Technologies V44 2026.06.29 14:49</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -1579,8 +1593,8 @@
       return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
     }
 
-    els.connect.addEventListener("click", connectSerial);
-    els.disconnect.addEventListener("click", disconnectSerial);
+    els.connect.addEventListener("click", () => connectSerial());
+    els.disconnect.addEventListener("click", () => disconnectSerial());
     els.modeRd.addEventListener("click", () => { setDisplayMode("rd"); exitContentOnlyView(); });
     els.modeDashboard.addEventListener("click", () => { setDisplayMode("dashboard"); enterContentOnlyView(); });
     els.refreshPorts.addEventListener("click", refreshPorts);
