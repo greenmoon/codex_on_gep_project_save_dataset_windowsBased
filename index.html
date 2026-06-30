@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Height Measurement Monitor by Joybien Technologies V48 2026.06.29 17:06</title>
+  <title>Height Measurement Monitor by Joybien Technologies V49 2026.06.30 12:04</title>
   <style>
     :root {
       color-scheme: light;
@@ -400,7 +400,7 @@
 </head>
 <body>
   <header>
-    <h1>Height Measurement Monitor by Joybien Technologies V48 2026.06.29 17:06</h1>
+    <h1>Height Measurement Monitor by Joybien Technologies V49 2026.06.30 12:04</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -490,14 +490,14 @@
           <input id="mqttTopic" type="text" value="height_cm" disabled>
         </label>
         <div class="row">
-          <button id="mqttConnect" type="button" disabled>Native MQTT via Python</button>
-          <button id="mqttDisconnect" type="button" disabled>MQTT Disconnect</button>
+          <button id="mqttConnect" type="button">Start Native MQTT</button>
+          <button id="mqttDisconnect" type="button" disabled>Stop Native MQTT</button>
         </div>
         <div class="row">
           <button id="mqttTestStart" disabled>Start mqtt_test</button>
           <button id="mqttTestStop" disabled>Stop mqtt_test</button>
         </div>
-        <div class="note" id="mqttStatus">Native MQTT TCP uses run_uart_to_mqtt_bridge.bat. No ws:// needed.</div>
+        <div class="note" id="mqttStatus">Run run_native_mqtt_helper.bat, then click Start Native MQTT. No ws:// needed.</div>
       </div>
 
       <p class="note">
@@ -597,6 +597,8 @@
     const MIN_VALID_HEIGHT_CM = 60;
     const MAX_VALID_HEIGHT_CM = 210;
     const PEAK_FALL_DELTA_M = 0.03;
+    const NATIVE_MQTT_HELPER_URL = "http://127.0.0.1:8765/publish";
+    const NATIVE_MQTT_PUBLISH_PERIOD_MS = 200;
 
     const colors = {
       r0: "#ff0000",
@@ -626,6 +628,8 @@
       mqttConnected: false,
       mqttTestTimer: null,
       mqttTestSeq: 0,
+      nativeMqttEnabled: false,
+      nativeMqttLastPublishMs: 0,
       badCount: 0,
       displayMode: "rd",
       dashboardEmptySinceMs: null,
@@ -915,10 +919,60 @@
       state.mqttConnected = isConnected;
       els.mqttConnect.disabled = isConnected;
       els.mqttDisconnect.disabled = !isConnected;
-      els.mqttUrl.disabled = isConnected;
-      els.mqttTopic.disabled = isConnected;
-      els.mqttTestStart.disabled = !isConnected || Boolean(state.mqttTestTimer);
-      els.mqttTestStop.disabled = !state.mqttTestTimer;
+      els.mqttUrl.disabled = true;
+      els.mqttTopic.disabled = true;
+      els.mqttTestStart.disabled = true;
+      els.mqttTestStop.disabled = true;
+    }
+
+    function startNativeMqttPublish() {
+      state.nativeMqttEnabled = true;
+      state.nativeMqttLastPublishMs = 0;
+      setMqttConnected(true);
+      setMqttStatus(`Native MQTT send enabled via ${NATIVE_MQTT_HELPER_URL}`);
+    }
+
+    function stopNativeMqttPublish() {
+      state.nativeMqttEnabled = false;
+      setMqttConnected(false);
+      setMqttStatus("Native MQTT send stopped.");
+    }
+
+    function nativeMqttTimeTag(date = new Date()) {
+      const p = (n, size = 2) => String(n).padStart(size, "0");
+      return `${date.getFullYear()}.${p(date.getMonth() + 1)}.${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}.${p(date.getMilliseconds(), 3)}`;
+    }
+
+    function nativeMqttPayload(rec) {
+      const heightMeters = calibratedHeight(rec);
+      if (heightMeters === null || !Number.isFinite(heightMeters)) return null;
+      const heightCm = heightMeters * 100;
+      if (heightCm <= MIN_VALID_HEIGHT_CM || heightCm >= MAX_VALID_HEIGHT_CM) return null;
+      return {
+        fn: rec.fn,
+        height_cm: Number(heightCm.toFixed(1)),
+        timetag: nativeMqttTimeTag()
+      };
+    }
+
+    async function publishNativeMqttRecord(rec) {
+      if (!state.nativeMqttEnabled) return;
+      const nowMs = Date.now();
+      if (nowMs - state.nativeMqttLastPublishMs < NATIVE_MQTT_PUBLISH_PERIOD_MS) return;
+      const payload = nativeMqttPayload(rec);
+      if (!payload) return;
+      state.nativeMqttLastPublishMs = nowMs;
+      try {
+        const res = await fetch(NATIVE_MQTT_HELPER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setMqttStatus(`Native MQTT sent height_cm: ${JSON.stringify(payload)}`);
+      } catch (err) {
+        setMqttStatus(`Native MQTT helper not ready: ${err.message}. Run run_native_mqtt_helper.bat.`);
+      }
     }
 
     function normalizeMqttUrl(rawUrl) {
@@ -1066,6 +1120,7 @@
       confirmDefaultUartPort();
       if (state.records.length > 20000) state.records.shift();
       updateMetrics();
+      publishNativeMqttRecord(rec);
       requestDraw();
     }
 
@@ -1601,8 +1656,8 @@
     els.clearData.addEventListener("click", clearData);
     els.downloadCsv.addEventListener("click", downloadCsv);
     els.downloadLog.addEventListener("click", downloadLog);
-    els.mqttConnect.addEventListener("click", connectMqtt);
-    els.mqttDisconnect.addEventListener("click", disconnectMqtt);
+    els.mqttConnect.addEventListener("click", startNativeMqttPublish);
+    els.mqttDisconnect.addEventListener("click", stopNativeMqttPublish);
     els.mqttTestStart.addEventListener("click", startMqttTest);
     els.mqttTestStop.addEventListener("click", stopMqttTest);
     els.fwRoi.addEventListener("input", () => {

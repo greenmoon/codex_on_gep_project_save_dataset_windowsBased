@@ -95,4 +95,27 @@ python uart_to_mqtt_bridge.py --port COM5 --baud 921600 --mqtt-host 59.124.7.96 
 ```
 
 Or edit `run_uart_to_mqtt_bridge.bat` and double-click it. When this bridge owns COM5, do not also click `Connect UART` in the browser page.
+## Browser Curve to Native MQTT Helper
+
+Use this mode when the browser URL should keep reading COM5, drawing the curve, and deriving height, but native MQTT TCP must publish through Python.
+
+Flow:
+
+```text
+Radar -> COM5 -> browser URL curve/height -> localhost helper -> native MQTT TCP 59.124.7.96:1883
+```
+
+Start the helper first:
+
+```powershell
+run_native_mqtt_helper.bat
+```
+
+Then open the URL, click `Connect UART`, and click `Start Native MQTT`. The browser posts payloads to `http://127.0.0.1:8765/publish`; the helper publishes them to topic `height_cm`.
+
+Payload format:
+
+```json
+{"fn":123,"height_cm":182.3,"timetag":"2026.06.30 12:04:30.123"}
+```
 
