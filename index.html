@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Height Measurement Monitor by Joybien Technologies V49 2026.06.30 12:04</title>
+  <title>Height Measurement Monitor by Joybien Technologies V50 2026.06.30 13:39</title>
   <style>
     :root {
       color-scheme: light;
@@ -267,9 +267,11 @@
     .dashboard-panel {
       display: none;
       min-height: 0;
-      align-content: center;
-      justify-content: center;
+      grid-template-rows: minmax(0, 1fr) auto;
+      align-items: center;
+      justify-items: center;
       padding: 18px;
+      background: #000000;
     }
 
     .dashboard-height {
@@ -296,6 +298,38 @@
       line-height: 0.95;
       letter-spacing: 0;
       white-space: nowrap;
+    }
+
+    .dashboard-payload-bar {
+      align-self: end;
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      width: min(100%, 980px);
+    }
+
+    .dashboard-payload-toggle {
+      min-width: 220px;
+      background: #000000;
+      border-color: #2563eb;
+      color: #2563eb;
+    }
+
+    .dashboard-payload-text {
+      width: 100%;
+      max-height: 88px;
+      margin: 0;
+      overflow: auto;
+      padding: 10px 12px;
+      background: #000000;
+      border: 1px solid #2563eb;
+      border-radius: 6px;
+      color: #2563eb;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 18px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     body.dashboard-mode header {
@@ -400,7 +434,7 @@
 </head>
 <body>
   <header>
-    <h1>Height Measurement Monitor by Joybien Technologies V49 2026.06.30 12:04</h1>
+    <h1>Height Measurement Monitor by Joybien Technologies V50 2026.06.30 13:39</h1>
     <div class="mode-switch" aria-label="Display mode">
       <button id="modeRd" type="button" data-mode="rd" class="active">RD</button>
       <button id="modeDashboard" type="button" data-mode="dashboard">DASHBOARD</button>
@@ -512,6 +546,10 @@
       </div>
       <div class="dashboard-panel" id="dashboardPanel">
         <div class="dashboard-height"><span>Your height is</span><b id="dashboardHeight">-</b></div>
+        <div class="dashboard-payload-bar">
+          <button id="mqttPayloadToggle" class="dashboard-payload-toggle" type="button">show MQTT payload</button>
+          <pre id="mqttPayloadText" class="dashboard-payload-text" hidden>No MQTT payload yet.</pre>
+        </div>
       </div>
       <div class="metrics">
         <div class="metric"><span>Records</span><b id="count">0</b></div>
@@ -539,6 +577,8 @@
       modeRd: document.getElementById("modeRd"),
       modeDashboard: document.getElementById("modeDashboard"),
       dashboardHeight: document.getElementById("dashboardHeight"),
+      mqttPayloadToggle: document.getElementById("mqttPayloadToggle"),
+      mqttPayloadText: document.getElementById("mqttPayloadText"),
       comPort: document.getElementById("comPort"),
       baudRate: document.getElementById("baudRate"),
       windowSize: document.getElementById("windowSize"),
@@ -630,6 +670,8 @@
       mqttTestSeq: 0,
       nativeMqttEnabled: false,
       nativeMqttLastPublishMs: 0,
+      latestMqttPayloadText: "",
+      mqttPayloadVisible: false,
       badCount: 0,
       displayMode: "rd",
       dashboardEmptySinceMs: null,
@@ -943,6 +985,17 @@
       return `${date.getFullYear()}.${p(date.getMonth() + 1)}.${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}.${p(date.getMilliseconds(), 3)}`;
     }
 
+    function updateMqttPayloadDisplay() {
+      els.mqttPayloadToggle.textContent = state.mqttPayloadVisible ? "hidden MQTT payload" : "show MQTT payload";
+      els.mqttPayloadText.hidden = !state.mqttPayloadVisible;
+      els.mqttPayloadText.textContent = state.latestMqttPayloadText || "No MQTT payload yet.";
+    }
+
+    function toggleMqttPayloadDisplay() {
+      state.mqttPayloadVisible = !state.mqttPayloadVisible;
+      updateMqttPayloadDisplay();
+    }
+
     function nativeMqttPayload(rec) {
       const heightMeters = calibratedHeight(rec);
       if (heightMeters === null || !Number.isFinite(heightMeters)) return null;
@@ -961,15 +1014,18 @@
       if (nowMs - state.nativeMqttLastPublishMs < NATIVE_MQTT_PUBLISH_PERIOD_MS) return;
       const payload = nativeMqttPayload(rec);
       if (!payload) return;
+      const payloadText = JSON.stringify(payload);
+      state.latestMqttPayloadText = payloadText;
+      updateMqttPayloadDisplay();
       state.nativeMqttLastPublishMs = nowMs;
       try {
         const res = await fetch(NATIVE_MQTT_HELPER_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: payloadText
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setMqttStatus(`Native MQTT sent height_cm: ${JSON.stringify(payload)}`);
+        setMqttStatus(`Native MQTT sent height_cm: ${payloadText}`);
       } catch (err) {
         setMqttStatus(`Native MQTT helper not ready: ${err.message}. Run run_native_mqtt_helper.bat.`);
       }
@@ -1658,6 +1714,7 @@
     els.downloadLog.addEventListener("click", downloadLog);
     els.mqttConnect.addEventListener("click", startNativeMqttPublish);
     els.mqttDisconnect.addEventListener("click", stopNativeMqttPublish);
+    els.mqttPayloadToggle.addEventListener("click", toggleMqttPayloadDisplay);
     els.mqttTestStart.addEventListener("click", startMqttTest);
     els.mqttTestStop.addEventListener("click", stopMqttTest);
     els.fwRoi.addEventListener("input", () => {
@@ -1698,6 +1755,7 @@
     if (!("serial" in navigator)) {
       setStatus("Web Serial needs Chrome or Edge over HTTPS.");
     }
+    updateMqttPayloadDisplay();
     loadSavedFwRoi();
     loadSavedHeightTh();
     loadSavedCali();
